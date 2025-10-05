@@ -37,7 +37,7 @@ namespace AI_API_ChatBot.Controllers
 
             var question = request.Message;
 
-            string dataFolder = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "data");
+            string dataFolder = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "files");
             var files = Directory.GetFiles(dataFolder);
             if (files.Length == 0)
             {
