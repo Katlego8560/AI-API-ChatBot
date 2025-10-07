@@ -23,27 +23,51 @@ namespace AI_API_ChatBot.Controllers
         [HttpPost]
         public async Task<IActionResult> Register([FromBody] RegisterUserDto request)
         {
-
             try
             {
-
                 if (!ModelState.IsValid)
                 {
                     return BadRequest("Invalid payload provided");
+                }
+
+                var userInDb = await _applicationDbContext.Users
+                    .FirstOrDefaultAsync(u => u.EmailAddress.ToLower() == request.EmailAddress.ToLower().Trim());
+
+                //Already registered
+                if (userInDb != null)
+                {
+                
+                    return Ok(new GetUserDto
+                    {
+                        Id = userInDb.Id,
+                        EmailAddress = userInDb.EmailAddress,
+                        FirstName = userInDb.FirstName,
+                        LastName = userInDb.LastName,
+                        CreatedAt = userInDb.CreatedAt.ToString("o")
+                    });
                 }
 
                 var newUser = new User
                 {
                     EmailAddress = request.EmailAddress.Trim(),
                     FirstName = request.FirstName.Trim(),
-                    LastName = request.LastName.Trim()
+                    LastName = request.LastName.Trim(),
+                    CreatedAt = DateTime.Now
                 };
-
                 await _applicationDbContext.Users.AddAsync(newUser);
                 await _applicationDbContext.SaveChangesAsync();
 
-                var userInDb = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.EmailAddress == newUser.EmailAddress);
-                return Ok(userInDb);
+                var newRegisteredUser = await _applicationDbContext.Users.
+                    FirstAsync(u => u.EmailAddress == newUser.EmailAddress);
+
+                return Ok(new GetUserDto
+                {
+                    Id = newRegisteredUser.Id,
+                    EmailAddress = newRegisteredUser.EmailAddress,
+                    FirstName = newRegisteredUser.FirstName,
+                    LastName = newRegisteredUser.LastName,
+                    CreatedAt = newRegisteredUser.CreatedAt.ToString("U")
+                });
 
             }
             catch (Exception ex)
