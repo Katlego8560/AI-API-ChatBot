@@ -18,8 +18,6 @@ namespace AI_API_ChatBot.Controllers
         private static readonly string PDF_DIR = "pdfs";
         private static readonly string DOCUMENT_NAME = "JAG-Lingo";
         private HttpClient httpClient = new HttpClient();
-
-        private static IList<ChatResponseDtocs> Messages = new List<ChatResponseDtocs>();
         private ApplicationDbContext _applicationDbContext { get; }
 
         public MessagesController(ApplicationDbContext applicationDbContext)
@@ -48,7 +46,14 @@ namespace AI_API_ChatBot.Controllers
                 return BadRequest("User not registred");
             }
 
-            var question = request.Message;
+            var aiUser = await _applicationDbContext.Users
+                .FirstOrDefaultAsync(u => u.EmailAddress ==  Constants.AI_USER_EMAIL_ADDRESS);
+            if (aiUser == null)
+            {
+                return BadRequest("AI User not found. Contact support");
+            }
+
+            var question = request.Message.Trim();
 
             string dataFolder = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "files");
             var files = Directory.GetFiles(dataFolder);
@@ -96,18 +101,34 @@ namespace AI_API_ChatBot.Controllers
                 if (response.IsSuccessStatusCode)
                 {
                     var responseObj = JsonConvert.DeserializeObject<dynamic>(responseContent);
-                    string answer = responseObj?.choices?[0]?.message?.content?.ToString() ?? "No response received.";
+                    string aiMessage = responseObj?.choices?[0]?.message?.content?.ToString() ?? "No response received.";
 
-                    var newMessage = new ChatResponseDtocs
+                    //Save author (user) message
+                    await _applicationDbContext.ChatMessages.AddAsync(new Data.Entities.ChatMessage
                     {
-                        Question = question,
-                        Answer = answer,
-                        DateTime = DateTime.Now
-                    };
+                        AuthorUserId = author.Id,
+                        ReceipientUserId = aiUser.Id,
+                        Message = request.Message.Trim(),
+                        CreatedAt = DateTime.Now
+                    });
 
-                    Messages.Add(newMessage);
+                    //Save AI  message
+                    await _applicationDbContext.ChatMessages.AddAsync(new Data.Entities.ChatMessage
+                    {
+                        AuthorUserId = aiUser.Id,
+                        ReceipientUserId = author.Id,
+                        Message = aiMessage.Trim(),
+                        CreatedAt = DateTime.Now
+                    });
 
-                    return Ok(Messages);
+                    await _applicationDbContext.SaveChangesAsync();
+
+                    var authorMessages = await _applicationDbContext
+                        .ChatMessages
+                        .Where(m => m.AuthorUserId == author.Id || m.ReceipientUserId == author.Id)
+                        .ToListAsync();
+
+                    return Ok(authorMessages);
 
                 }
                 else
