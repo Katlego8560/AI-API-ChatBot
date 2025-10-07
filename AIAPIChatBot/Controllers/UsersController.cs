@@ -11,7 +11,6 @@ namespace AI_API_ChatBot.Controllers
     [ApiController]
     public class UsersController : ControllerBase
     {
-
         private ApplicationDbContext _applicationDbContext { get; }
 
         public UsersController(ApplicationDbContext applicationDbContext)

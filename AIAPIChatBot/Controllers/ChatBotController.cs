@@ -102,7 +102,7 @@ namespace AI_API_ChatBot.Controllers
                     {
                         Question = question,
                         Answer = answer,
-                        DateTime = DateTime.Now,
+                        DateTime = DateTime.Now
                     };
 
                     Messages.Add(newMessage);
