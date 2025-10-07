@@ -1,8 +1,10 @@
 ﻿using System.Text;
+using AI_API_ChatBot.Data;
 using AI_API_ChatBot.Models;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 
 namespace AI_API_ChatBot.Controllers
@@ -18,21 +20,32 @@ namespace AI_API_ChatBot.Controllers
         private HttpClient httpClient = new HttpClient();
 
         private static IList<ChatResponseDtocs> Messages = new List<ChatResponseDtocs>();
+        private ApplicationDbContext _applicationDbContext { get; }
 
-        public MessagesController()
+        public MessagesController(ApplicationDbContext applicationDbContext)
         {
             httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {API_KEY}");
             httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "http://localhost");
             httpClient.DefaultRequestHeaders.Add("X-Title", "PDF Q&A Chat App");
+
+            _applicationDbContext = applicationDbContext;
         }
 
 
         [HttpPost]
-        public async Task<IActionResult> ReceiveMessage([FromBody] MessageDTO request)
+        public async Task<IActionResult> ReceiveMessage([FromBody] SendMessageDTO request)
         {
-            if (request == null || string.IsNullOrEmpty(request.Message))
+            if (!ModelState.IsValid)
             {
-                return BadRequest("Message is required.");
+                return BadRequest("Invalid payload");
+            }
+
+            var author = await _applicationDbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == request.UserId);
+
+            if (author == null)
+            {
+                return BadRequest("User not registred");
             }
 
             var question = request.Message;
