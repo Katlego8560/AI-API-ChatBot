@@ -13,5 +13,6 @@ namespace AI_API_ChatBot.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<KnowledgeBase> KnowledgeBase { get; set; }
     }
 }
