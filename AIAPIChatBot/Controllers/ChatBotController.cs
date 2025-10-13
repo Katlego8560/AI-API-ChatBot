@@ -1,5 +1,7 @@
-﻿using System.Text;
+﻿using System.Net;
+using System.Text;
 using AI_API_ChatBot.Data;
+using AI_API_ChatBot.Data.Entities;
 using AI_API_ChatBot.Models;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
@@ -13,7 +15,7 @@ namespace AI_API_ChatBot.Controllers
     [Route("api/messages")]
     public class MessagesController : ControllerBase
     {
-        private static readonly string API_KEY = "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";
+        private static readonly string API_KEY = "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";
         private static readonly string BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
         private static readonly string PDF_DIR = "pdfs";
         private static readonly string DOCUMENT_NAME = "JAG-Lingo";
@@ -29,6 +31,100 @@ namespace AI_API_ChatBot.Controllers
             _applicationDbContext = applicationDbContext;
         }
 
+
+        [HttpPost("add-knowledge")]
+        public async Task<IActionResult> Addknowledge([FromBody] AddKnowledgeDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest("Invalid payload provided");
+                }
+
+                var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
+
+                if (author == null)
+                {
+                    return BadRequest("User not registred");
+                }
+
+                //TODO: Prevent Against SQL-Injection - sanitize the content before saving it in the database
+
+
+                var newKnowledge = new KnowledgeBase
+                {
+                    AuthorId = author.Id,
+                    Content = request.Content.Trim(),
+                    CreatedAt = DateTime.Now
+                };
+                await _applicationDbContext.KnowledgeBase.AddAsync(newKnowledge);
+                await _applicationDbContext.SaveChangesAsync();
+
+
+                var authorKnowledgeBase = await _applicationDbContext.KnowledgeBase
+                    .Where(m => m.AuthorId == author.Id)
+                    .Select(k => new GetKnowledgeBaseDto
+                    {
+                        Id = k.Id,
+                        AuthorId = author.Id,
+                        Content = k.Content,
+                        CreatedAt = k.CreatedAt.ToString("o")
+                    })
+                   .ToListAsync();
+
+
+                return Ok(authorKnowledgeBase);
+
+            }
+            catch (Exception ex)
+            {
+                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
+                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
+            }
+        }
+
+        [HttpDelete("remove-knowledge")]
+        public async Task<IActionResult> RemoveKnowledge([FromBody] RemoveKnowledgeBaseDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest("Invalid payload provided");
+                }
+
+                var knowledge = await _applicationDbContext.KnowledgeBase.FirstOrDefaultAsync(u => u.Id == request.Id);
+                if (knowledge == null)
+                {
+                    return BadRequest("Knowledge Content not found");
+                }
+
+                var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
+                if (author == null)
+                {
+                    return BadRequest("User not registred");
+                }
+
+
+                //Can only delete your own knowledge content
+                if (knowledge.AuthorId != author.Id)
+                {
+                    return BadRequest("Cannot delete content not added by you");
+                }
+
+                _applicationDbContext.KnowledgeBase.Remove(knowledge);
+                await _applicationDbContext.SaveChangesAsync();
+
+                return Ok();
+
+            }
+            catch (Exception ex)
+            {
+                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
+                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
+            }
+        }
 
         [HttpPost]
         public async Task<IActionResult> ReceiveMessage([FromBody] SendMessageDTO request)
@@ -47,7 +143,7 @@ namespace AI_API_ChatBot.Controllers
             }
 
             var aiUser = await _applicationDbContext.Users
-                .FirstOrDefaultAsync(u => u.EmailAddress ==  Constants.AI_USER_EMAIL_ADDRESS);
+                .FirstOrDefaultAsync(u => u.EmailAddress == Constants.AI_USER_EMAIL_ADDRESS);
             if (aiUser == null)
             {
                 return BadRequest("AI User not found. Contact support");
@@ -72,6 +168,13 @@ namespace AI_API_ChatBot.Controllers
 
             try
             {
+                var usersknowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
+                                             .Where(k => k.AuthorId == author.Id)
+                                             .Select(k => $"\"{k.Content}\"")
+                                             .ToListAsync());
+
+                var formattedContent = $"[{usersknowledgeContent}]";
+
                 var requestBody = new
                 {
                     model = "gpt-4o-mini",
@@ -80,12 +183,12 @@ namespace AI_API_ChatBot.Controllers
                         new
                         {
                             role = "system",
-                            content = "You are a helpful assistant that answers questions based on the provided document. Answer questions accurately and concisely based only on the information in the document. If the question cannot be answered from the document, say so clearly."
+                           content = $"You are a helpful assistant that answers questions based on the provided document and additional context from the user's knowledge base. When answering questions, first prioritize information from the document. If the question cannot be answered from the document, use the additional context to provide an answer. If the question still cannot be answered, say so clearly."
                         },
                         new
                         {
                             role = "user",
-                            content = $"Document content:\n{pdfText}\n\nQuestion: {question}"
+                             content = $"Document content:\n{pdfText}\n\nAdditional context: {string.Join(". ", usersknowledgeContent)}\n\nQuestion: {question}"
                         }
                     },
                     max_tokens = 1000,
@@ -103,7 +206,7 @@ namespace AI_API_ChatBot.Controllers
                     var responseObj = JsonConvert.DeserializeObject<dynamic>(responseContent);
                     string aiMessage = responseObj?.choices?[0]?.message?.content?.ToString() ?? "No response received.";
 
-                    //Save author (user) message
+
                     await _applicationDbContext.ChatMessages.AddAsync(new Data.Entities.ChatMessage
                     {
                         AuthorUserId = author.Id,
@@ -112,8 +215,8 @@ namespace AI_API_ChatBot.Controllers
                         CreatedAt = DateTime.Now
                     });
 
-                    //Save AI  message
-                    await _applicationDbContext.ChatMessages.AddAsync(new Data.Entities.ChatMessage
+
+                    await _applicationDbContext.ChatMessages.AddAsync(new ChatMessage
                     {
                         AuthorUserId = aiUser.Id,
                         ReceipientUserId = author.Id,
@@ -123,17 +226,20 @@ namespace AI_API_ChatBot.Controllers
 
                     await _applicationDbContext.SaveChangesAsync();
 
-                    var authorMessages = await _applicationDbContext
+                    var recentMessages = await _applicationDbContext
                         .ChatMessages
                         .Where(m => m.AuthorUserId == author.Id || m.ReceipientUserId == author.Id)
+                        .OrderByDescending(m => m.CreatedAt)
+                        .Take(2)
+                        .OrderBy(m => m.CreatedAt)
                         .ToListAsync();
 
-                    return Ok(authorMessages);
+                    return Ok(recentMessages);
 
                 }
                 else
                 {
-                    return BadRequest($"API Error Code: {response.StatusCode} with Error Message: {responseContent}");
+                    return BadRequest($"AI API Integration Error Code: {response.StatusCode} with Error Message: {responseContent}");
                 }
             }
             catch (Exception ex)

@@ -32,7 +32,7 @@ namespace AI_API_ChatBot.Controllers
                 var userInDb = await _applicationDbContext.Users
                     .FirstOrDefaultAsync(u => u.EmailAddress.ToLower() == request.EmailAddress.ToLower().Trim());
 
-                //Already registered
+                
                 if (userInDb != null)
                 {
                 
