@@ -19,6 +19,33 @@ namespace AI_API_ChatBot.Controllers
             _applicationDbContext = applicationDbContext;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            try
+            {
+                
+                var authorKnowledgeBase = await _applicationDbContext
+                    .KnowledgeBase
+                    .Select(k => new GetKnowledgeBaseDto
+                    {
+                        Id = k.Id,
+                        Content = k.Content,
+                        CreatedAt = k.CreatedAt.ToString("o")
+                    })
+                   .ToListAsync();
+
+
+                return Ok(authorKnowledgeBase);
+
+            }
+            catch (Exception ex)
+            {
+                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
+                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Addknowledge([FromBody] AddKnowledgeDto request)
         {
@@ -56,7 +83,6 @@ namespace AI_API_ChatBot.Controllers
                     .Select(k => new GetKnowledgeBaseDto
                     {
                         Id = k.Id,
-                        AuthorId = author.Id,
                         Content = k.Content,
                         CreatedAt = k.CreatedAt.ToString("o")
                     })

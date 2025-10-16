@@ -28,7 +28,7 @@ namespace AI_API_ChatBot.Controllers
 
             _applicationDbContext = applicationDbContext;
         }
-       
+
         [HttpPost]
         public async Task<IActionResult> ReceiveMessage([FromBody] SendMessageDTO request)
         {
@@ -37,28 +37,40 @@ namespace AI_API_ChatBot.Controllers
                 return BadRequest("Invalid payload");
             }
 
-            var author = await _applicationDbContext.Users
-                .FirstOrDefaultAsync(u => u.Id == request.UserId);
-
+            var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
             if (author == null)
             {
                 return BadRequest("User not registred");
             }
 
-            var aiUser = await _applicationDbContext.Users
-                .FirstOrDefaultAsync(u => u.EmailAddress == Constants.AI_USER_EMAIL_ADDRESS);
+            var aiUser = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.EmailAddress == Constants.AI_USER_EMAIL_ADDRESS);
             if (aiUser == null)
             {
                 return BadRequest("AI User not found. Contact support");
             }
 
+            if(aiUser.Id == request.UserId)
+            {
+                return BadRequest("Cannot send messages using AI User profile");
+            }
+
+            var adminUser = await _applicationDbContext.Users
+               .FirstOrDefaultAsync(u => u.EmailAddress == Constants.ADMIN_USER_EMAIL_ADDRESS);
+            if (adminUser == null)
+            {
+                return BadRequest("Admin User not found. Contact support");
+            }
+
             var question = request.Message.Trim();
-
-           
-
 
             try
             {
+                var adminContent = await _applicationDbContext.KnowledgeBase.AnyAsync(k => k.AuthorId == adminUser.Id);
+                if(adminContent == false)
+                {
+                    return BadRequest("No knowledge content found. Contact support");
+                }
+
                 var adminKnowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
                                              .Where(k => k.AuthorId == author.Id)
                                              .Select(k => $"\"{k.Content}\"")

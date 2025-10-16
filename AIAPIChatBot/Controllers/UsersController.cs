@@ -18,6 +18,35 @@ namespace AI_API_ChatBot.Controllers
             _applicationDbContext = applicationDbContext;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            try
+            {
+
+                var authorKnowledgeBase = await _applicationDbContext
+                    .Users
+                    .Select(u => new GetUserDto
+                    {
+                        Id = u.Id,
+                        EmailAddress = u.EmailAddress,
+                        FirstName = u.FirstName,
+                        LastName = u.LastName,
+                        CreatedAt = u.CreatedAt.ToString("o")
+                    })
+                   .ToListAsync();
+
+
+                return Ok(authorKnowledgeBase);
+
+            }
+            catch (Exception ex)
+            {
+                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
+                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Register([FromBody] RegisterUserDto request)
         {
@@ -74,7 +103,7 @@ namespace AI_API_ChatBot.Controllers
                     EmailAddress = newRegisteredUser.EmailAddress,
                     FirstName = newRegisteredUser.FirstName,
                     LastName = newRegisteredUser.LastName,
-                    CreatedAt = newRegisteredUser.CreatedAt.ToString("U")
+                    CreatedAt = newRegisteredUser.CreatedAt.ToString("o")
                 });
 
             }
