@@ -18,7 +18,6 @@ namespace AI_API_ChatBot.Controllers
             _applicationDbContext = applicationDbContext;
         }
 
-
         [HttpPost]
         public async Task<IActionResult> Register([FromBody] RegisterUserDto request)
         {
@@ -30,7 +29,7 @@ namespace AI_API_ChatBot.Controllers
                 }
 
                 var userInDb = await _applicationDbContext.Users
-                    .FirstOrDefaultAsync(u => u.EmailAddress.ToLower() == request.EmailAddress.ToLower().Trim());
+                   .FirstOrDefaultAsync(u => u.EmailAddress.ToLower() == request.EmailAddress.ToLower().Trim());
 
                 
                 if (userInDb != null)
@@ -44,6 +43,16 @@ namespace AI_API_ChatBot.Controllers
                         LastName = userInDb.LastName,
                         CreatedAt = userInDb.CreatedAt.ToString("o")
                     });
+                }
+
+                if(request.EmailAddress.ToLower().Trim() == Constants.ADMIN_USER_EMAIL_ADDRESS.ToLower().Trim())
+                {
+                    return BadRequest("Cannot register with admin email address");
+                }
+
+                if (request.EmailAddress.ToLower().Trim() == Constants.AI_USER_EMAIL_ADDRESS.ToLower().Trim())
+                {
+                    return BadRequest("Cannot register with AI email address");
                 }
 
                 var newUser = new User
@@ -72,7 +81,6 @@ namespace AI_API_ChatBot.Controllers
             catch (Exception ex)
             {
                 return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
-                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
             }
         }
     }

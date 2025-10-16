@@ -11,14 +11,12 @@ using Newtonsoft.Json;
 
 namespace AI_API_ChatBot.Controllers
 {
+    [Route("api/[controller]")]
     [ApiController]
-    [Route("api/messages")]
     public class MessagesController : ControllerBase
     {
-        private static readonly string API_KEY = "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";
+        private static readonly string API_KEY = "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";
         private static readonly string BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
-        private static readonly string PDF_DIR = "pdfs";
-        private static readonly string DOCUMENT_NAME = "JAG-Lingo";
         private HttpClient httpClient = new HttpClient();
         private ApplicationDbContext _applicationDbContext { get; }
 
@@ -30,102 +28,7 @@ namespace AI_API_ChatBot.Controllers
 
             _applicationDbContext = applicationDbContext;
         }
-
-
-        [HttpPost("add-knowledge")]
-        public async Task<IActionResult> Addknowledge([FromBody] AddKnowledgeDto request)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest("Invalid payload provided");
-                }
-
-                var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
-
-                if (author == null)
-                {
-                    return BadRequest("User not registred");
-                }
-
-                //TODO: Prevent Against SQL-Injection - sanitize the content before saving it in the database
-
-
-                var newKnowledge = new KnowledgeBase
-                {
-                    AuthorId = author.Id,
-                    Content = request.Content.Trim(),
-                    CreatedAt = DateTime.Now
-                };
-                await _applicationDbContext.KnowledgeBase.AddAsync(newKnowledge);
-                await _applicationDbContext.SaveChangesAsync();
-
-
-                var authorKnowledgeBase = await _applicationDbContext.KnowledgeBase
-                    .Where(m => m.AuthorId == author.Id)
-                    .Select(k => new GetKnowledgeBaseDto
-                    {
-                        Id = k.Id,
-                        AuthorId = author.Id,
-                        Content = k.Content,
-                        CreatedAt = k.CreatedAt.ToString("o")
-                    })
-                   .ToListAsync();
-
-
-                return Ok(authorKnowledgeBase);
-
-            }
-            catch (Exception ex)
-            {
-                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
-                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
-            }
-        }
-
-        [HttpDelete("remove-knowledge")]
-        public async Task<IActionResult> RemoveKnowledge([FromBody] RemoveKnowledgeBaseDto request)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest("Invalid payload provided");
-                }
-
-                var knowledge = await _applicationDbContext.KnowledgeBase.FirstOrDefaultAsync(u => u.Id == request.Id);
-                if (knowledge == null)
-                {
-                    return BadRequest("Knowledge Content not found");
-                }
-
-                var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
-                if (author == null)
-                {
-                    return BadRequest("User not registred");
-                }
-
-
-                //Can only delete your own knowledge content
-                if (knowledge.AuthorId != author.Id)
-                {
-                    return BadRequest("Cannot delete content not added by you");
-                }
-
-                _applicationDbContext.KnowledgeBase.Remove(knowledge);
-                await _applicationDbContext.SaveChangesAsync();
-
-                return Ok();
-
-            }
-            catch (Exception ex)
-            {
-                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
-                //return Content(HttpStatusCode.InternalServerError.ToString(), ex.Message);
-            }
-        }
-
+       
         [HttpPost]
         public async Task<IActionResult> ReceiveMessage([FromBody] SendMessageDTO request)
         {
@@ -151,29 +54,17 @@ namespace AI_API_ChatBot.Controllers
 
             var question = request.Message.Trim();
 
-            string dataFolder = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "files");
-            var files = Directory.GetFiles(dataFolder);
-            if (files.Length == 0)
-            {
-                return BadRequest("No files found");
-            }
-
-            string filePath = files[0];
-            string pdfText = ExtractTextFromPdf(filePath);
-            if (string.IsNullOrWhiteSpace(pdfText))
-            {
-                return BadRequest("Error: Could not extract text from PDF. The file might be corrupted or password-protected.");
-            }
+           
 
 
             try
             {
-                var usersknowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
+                var adminKnowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
                                              .Where(k => k.AuthorId == author.Id)
                                              .Select(k => $"\"{k.Content}\"")
                                              .ToListAsync());
 
-                var formattedContent = $"[{usersknowledgeContent}]";
+                var formattedContent = $"[{adminKnowledgeContent}]";
 
                 var requestBody = new
                 {
@@ -188,7 +79,7 @@ namespace AI_API_ChatBot.Controllers
                         new
                         {
                             role = "user",
-                             content = $"Document content:\n{pdfText}\n\nAdditional context: {string.Join(". ", usersknowledgeContent)}\n\nQuestion: {question}"
+                             content = $"Context: {string.Join(". ", adminKnowledgeContent)}\n\nQuestion: {question}"
                         }
                     },
                     max_tokens = 1000,
@@ -254,26 +145,5 @@ namespace AI_API_ChatBot.Controllers
             return Ok(new { ReceivedMessage = request.Message });
         }
 
-        static string ExtractTextFromPdf(string filePath)
-        {
-            try
-            {
-                var sb = new StringBuilder();
-                using (var reader = new PdfReader(filePath))
-                {
-                    for (int i = 1; i <= reader.NumberOfPages; i++)
-                    {
-                        string text = PdfTextExtractor.GetTextFromPage(reader, i);
-                        sb.AppendLine(text);
-                    }
-                }
-                return sb.ToString();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error extracting text from PDF: {ex.Message}");
-                return string.Empty;
-            }
-        }
     }
 }

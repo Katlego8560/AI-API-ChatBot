@@ -5,7 +5,7 @@
 namespace AI_API_ChatBot.Migrations
 {
     /// <inheritdoc />
-    public partial class SeedAIUser : Migration
+    public partial class SeedAdminUser : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -15,8 +15,8 @@ namespace AI_API_ChatBot.Migrations
                 values: new object[]
                 {
                 "Jag",
-                "AI",
-                Constants.AI_USER_EMAIL_ADDRESS,
+                "Admin",
+                Constants.ADMIN_USER_EMAIL_ADDRESS,
                 DateTime.Now
                 });
         }
@@ -26,7 +26,7 @@ namespace AI_API_ChatBot.Migrations
             migrationBuilder.DeleteData(
                 table: "Users",
                 keyColumn: "EmailAddress",
-                keyValue: Constants.AI_USER_EMAIL_ADDRESS);
+                keyValue: Constants.ADMIN_USER_EMAIL_ADDRESS);
         }
     }
 }
