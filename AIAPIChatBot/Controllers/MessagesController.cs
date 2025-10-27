@@ -15,7 +15,7 @@ namespace AI_API_ChatBot.Controllers
     [ApiController]
     public class MessagesController : ControllerBase
     {
-        private static readonly string API_KEY = "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";
+        private static readonly string API_KEY = "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";
         private static readonly string BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
         private HttpClient httpClient = new HttpClient();
         private ApplicationDbContext _applicationDbContext { get; }
@@ -49,7 +49,7 @@ namespace AI_API_ChatBot.Controllers
                 return BadRequest("AI User not found. Contact support");
             }
 
-            if(aiUser.Id == request.UserId)
+            if (aiUser.Id == request.UserId)
             {
                 return BadRequest("Cannot send messages using AI User profile");
             }
@@ -66,13 +66,12 @@ namespace AI_API_ChatBot.Controllers
             try
             {
                 var adminContent = await _applicationDbContext.KnowledgeBase.AnyAsync(k => k.AuthorId == adminUser.Id);
-                if(adminContent == false)
+                if (adminContent == false)
                 {
                     return BadRequest("No knowledge content found. Contact support");
                 }
 
                 var adminKnowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
-                                             .Where(k => k.AuthorId == author.Id)
                                              .Select(k => $"\"{k.Content}\"")
                                              .ToListAsync());
 
@@ -83,16 +82,16 @@ namespace AI_API_ChatBot.Controllers
                     model = "gpt-4o-mini",
                     messages = new[]
                     {
-                        new
-                        {
+                       new
+                       {
                             role = "system",
-                           content = $"You are a helpful assistant that answers questions based on the provided document and additional context from the user's knowledge base. When answering questions, first prioritize information from the document. If the question cannot be answered from the document, use the additional context to provide an answer. If the question still cannot be answered, say so clearly."
-                        },
-                        new
-                        {
+                            content = $"You are a helpful assistant that answers the user's questions based on the knowledge base context. Don't include HTML tags in your response. If the question cannot be answered, say so clearly. Knowledge base context: {string.Join(". ", adminKnowledgeContent)}"
+                       },
+                       new
+                       {
                             role = "user",
-                             content = $"Context: {string.Join(". ", adminKnowledgeContent)}\n\nQuestion: {question}"
-                        }
+                            content = $"Question: {question}"
+                       }
                     },
                     max_tokens = 1000,
                     temperature = 0.7
