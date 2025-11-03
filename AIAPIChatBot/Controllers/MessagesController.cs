@@ -71,30 +71,32 @@ namespace AI_API_ChatBot.Controllers
                     return BadRequest("No knowledge content found. Contact support");
                 }
 
-                var adminKnowledgeContent = string.Join(", ", await _applicationDbContext.KnowledgeBase
-                                             .Select(k => $"\"{k.Content}\"")
-                                             .ToListAsync());
+                var adminKnowledgeContent = await _applicationDbContext.KnowledgeBase
+                                                .Select(k => k.Content)
+                                                .ToListAsync();
 
-                var formattedContent = $"[{adminKnowledgeContent}]";
+                string knowledgeBaseText = string.Join("\n", adminKnowledgeContent);
 
                 var requestBody = new
                 {
                     model = "gpt-4o-mini",
                     messages = new[]
                     {
-                       new
-                       {
+                        new
+                        {
                             role = "system",
-                            content = $"You are a helpful assistant that answers the user's questions based on the knowledge base context. Don't include HTML tags in your response. If the question cannot be answered, say so clearly. Knowledge base context: {string.Join(". ", adminKnowledgeContent)}"
-                       },
-                       new
-                       {
+                            content = $"You are a helpful assistant. ONLY answer questions based on the knowledge base below. " +
+                                      "If you don't know the answer, respond with 'No answer based on provided knowledge base.'\n" +
+                                      knowledgeBaseText
+                        },
+                        new
+                        {
                             role = "user",
                             content = $"Question: {question}"
-                       }
+                        }
                     },
                     max_tokens = 1000,
-                    temperature = 0.7
+                    temperature = 0.1 // keeping temperature low to reduce AI's creative deviations aways from knowledge base content
                 };
 
                 string jsonContent = JsonConvert.SerializeObject(requestBody);
