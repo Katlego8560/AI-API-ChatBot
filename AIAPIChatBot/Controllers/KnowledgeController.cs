@@ -99,8 +99,8 @@ namespace AI_API_ChatBot.Controllers
             }
         }
 
-        [HttpDelete]
-        public async Task<IActionResult> RemoveKnowledge([FromBody] RemoveKnowledgeBaseDto request)
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> RemoveKnowledge(int id, [FromBody] RemoveKnowledgeBaseDto request)
         {
             try
             {
@@ -109,7 +109,7 @@ namespace AI_API_ChatBot.Controllers
                     return BadRequest("Invalid payload provided");
                 }
 
-                var knowledge = await _applicationDbContext.KnowledgeBase.FirstOrDefaultAsync(u => u.Id == request.Id);
+                var knowledge = await _applicationDbContext.KnowledgeBase.FirstOrDefaultAsync(u => u.Id == id);
                 if (knowledge == null)
                 {
                     return BadRequest("Knowledge Content not found");
@@ -143,5 +143,62 @@ namespace AI_API_ChatBot.Controllers
 
             }
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> EditKnowledge(int id, [FromBody] EditKnowledgeDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest("Invalid payload provided");
+                }
+
+                var knowledge = await _applicationDbContext.KnowledgeBase.FindAsync(id);
+
+                if (knowledge == null)
+                {
+                    return NotFound("Knowledge not found");
+                }
+
+                var author = await _applicationDbContext.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
+
+                if (author == null)
+                {
+                    return BadRequest("Author not registered.");
+                }
+
+                if (knowledge.AuthorId != author.Id)
+                {
+                    return BadRequest("You are not authorized to edit this knowledge");
+                }
+
+                if (author.EmailAddress != Constants.ADMIN_USER_EMAIL_ADDRESS)
+                {
+                    return BadRequest("Only admins can edit knowledge content");
+                }
+
+                knowledge.Content = request.Content.Trim();
+
+                _applicationDbContext.KnowledgeBase.Update(knowledge);
+                await _applicationDbContext.SaveChangesAsync();
+
+                var updatedKnowledge = await _applicationDbContext.KnowledgeBase
+                    .Where(m => m.Id == knowledge.Id)
+                    .Select(k => new GetKnowledgeBaseDto
+                    {
+                        Id = k.Id,
+                        Content = k.Content,
+                        CreatedAt = k.CreatedAt.ToString("o")
+                    })
+                    .FirstOrDefaultAsync();
+
+                return Ok(updatedKnowledge);
+            }
+            catch (Exception ex)
+            {
+                return Content(HttpStatusCode.InternalServerError.ToString(), "Internal server error occured");
+            }
+        }   
     }
 }
